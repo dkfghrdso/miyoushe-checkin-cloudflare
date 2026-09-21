@@ -1,4 +1,4 @@
-# 米游社自动签到（Cloudflare Workers + Pages + KV）
+# 米游社自动签到（Cloudflare Workers + Static Assets + KV）
 
 > [!IMPORTANT]
 > **使用下面的一键部署按钮前，请先 Fork 本仓库。**
@@ -6,40 +6,36 @@
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/dkfghrdso/miyoushe-checkin-cloudflare/tree/main/worker)
 
-一键部署会打开 Cloudflare 授权页，申请本项目所需权限（Workers 脚本、KV 命名空间等），并自动创建 KV、部署 **Worker 后端**（含每分钟 Cron）。
-
-> [!WARNING]
-> Cloudflare 官方的「Deploy to Cloudflare」按钮**只支持 Workers 应用，不支持 Pages**。所以上面的按钮只部署后端 Worker；**前端 Pages 需要再单独部署一次**，步骤见 [部署前端（Pages）](#部署前端pages)。
+一键部署会打开 Cloudflare 授权页，申请本项目所需权限（Workers 脚本、KV 命名空间等），并自动创建 KV、部署**整个应用**：后端 API + Cron + 前端页面（由同一个 Worker 的 Static Assets 托管）。
 
 把原来的本地 Python 版本重构为 Cloudflare 全托管：
 
-- **工作线程（后端）** `worker/` — 提供 `/api/*` HTTP 接口，并用 **Cron Trigger**（每分钟）替代原来的 `daemon` 常驻进程。
-- **Pages（前端）** `pages/` — 静态管理页面（`index.html` / `login.html`），通过 **Pages Functions 反向代理**把 `/api/*` 转发给 Worker，浏览器看到的是同源，会话 Cookie 稳定可用。
+- **Worker（后端 + 前端）** `worker/` — 提供 `/api/*` HTTP 接口，并用 **Cron Trigger**（每分钟）替代原来的 `daemon` 常驻进程；同时通过 **Static Assets** 托管 `worker/public/` 里的管理页面。
 - **KV（数据库）** — 绑定 `MIYO_KV`，保存配置、用户、定时状态、会话、两步验证临时数据。
+
+因为前后端同源（都由同一个 Worker 提供），会话 Cookie 直接可用，无需 CORS 或反向代理。
 
 ## 目录结构
 
 ```
 miyoushe-checkin-cf/
-├── worker/                 # 后端 Worker
-│   ├── src/
-│   │   ├── index.ts        # 路由 + fetch/scheduled 入口
-│   │   ├── miyoushe.ts     # 米游社客户端与签到逻辑
-│   │   ├── games.ts        # 游戏与活动 ID 配置
-│   │   ├── crypto.ts       # PBKDF2 / TOTP / HMAC / base32
-│   │   ├── store.ts        # KV 存取与配置模型
-│   │   ├── notify.ts       # Server酱 / 飞书 / 钉钉 / Telegram / Webhook
-│   │   ├── schedule.ts     # 时区计算 + Cron 调度
-│   │   ├── auth.ts         # 会话 / 登录限流 / 两步验证
-│   │   ├── checkin.ts      # 一次执行（签到 + 通知 + 记录）
-│   │   └── qrcode.ts       # otpauth URI -> SVG 二维码
-│   ├── test/quick.ts       # 纯函数自测（TOTP/时区/PBKDF2）
-│   ├── wrangler.jsonc
-│   └── worker-configuration.d.ts  # wrangler types 生成
-└── pages/                  # 前端 Pages
-    ├── public/             # 静态资源
-    ├── functions/api/[[path]].ts  # 反向代理到 Worker
-    └── wrangler.jsonc
+└── worker/                 # 单个 Worker：API + 前端静态资源
+    ├── src/
+    │   ├── index.ts        # 路由 + fetch/scheduled 入口
+    │   ├── miyoushe.ts     # 米游社客户端与签到逻辑
+    │   ├── games.ts        # 游戏与活动 ID 配置
+    │   ├── crypto.ts       # PBKDF2 / TOTP / HMAC / base32
+    │   ├── store.ts        # KV 存取与配置模型
+    │   ├── notify.ts       # Server酱 / 飞书 / 钉钉 / Telegram / Webhook
+    │   ├── schedule.ts     # 时区计算 + Cron 调度
+    │   ├── auth.ts         # 会话 / 登录限流 / 两步验证
+    │   ├── checkin.ts      # 一次执行（签到 + 通知 + 记录）
+    │   ├── time.ts         # 时区工具
+    │   └── qrcode.ts       # otpauth URI -> SVG 二维码
+    ├── public/             # 前端静态资源（index.html / login.html / theme.js）
+    ├── test/quick.ts       # 纯函数自测（TOTP/时区/PBKDF2）
+    ├── wrangler.jsonc
+    └── worker-configuration.d.ts  # wrangler types 生成
 ```
 
 ## 部署后的资源
@@ -49,15 +45,14 @@ miyoushe-checkin-cf/
 | Worker | `miyoushe-api` → `https://<your-worker>.<your-subdomain>.workers.dev` |
 | Cron | `* * * * *`（每分钟检查一次是否到达签到时间） |
 | KV | `MIYO_KV`（id `******`；一键部署会自动创建并回填） |
-| Pages | `miyoushe-checkin` → `https://<your-project>.pages.dev` |
-| 自定义域名 | 可选，绑定你自己的域名（CNAME 到 Pages） |
+| 自定义域名 | 可选，给 Worker 绑定你自己的域名（Worker Route / Custom Domain） |
 | Cloudflare 账号 ID | `******` |
 
-> 部分网络会污染 `*.workers.dev` 的解析。前端只访问 Pages 域名，Worker 由 Pages Function 在 Cloudflare 内部调用，因此浏览器不需要直连 `workers.dev`。如需更稳的入口，可给 Pages 绑定自有域名。
+> 部分网络会污染 `*.workers.dev` 的解析。前后端都在同一个 Worker 上，如需更稳的入口，给 Worker 绑定自有域名即可。
 
 ## 首次使用
 
-1. 打开你的 Pages 域名（如 `https://<your-project>.pages.dev` 或你绑定的自定义域名），会自动跳转 `/login`。
+1. 打开你的域名（`https://<your-worker>.<your-subdomain>.workers.dev` 或你绑定的自定义域名），会自动跳转 `/login`。
 2. 因为尚未初始化，页面会显示「首次使用，请创建管理账号」，设置用户名 + 密码（≥ 6 位）并登录。
 3. 登录后建议按提示开启两步验证（TOTP，支持扫码）。
 4. 在「用户管理」中「+ 添加用户」，粘贴米游社 Cookie、选择游戏，保存。
@@ -94,18 +89,13 @@ miyoushe-checkin-cf/
 ## 本地开发 / 重新部署
 
 ```bash
-# 后端
 cd worker && npm install
 npx wrangler dev --test-scheduled        # 本地；触发定时：curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"
 npx tsc --noEmit                          # 类型检查
-npx wrangler deploy
+npx wrangler deploy                       # 一次部署：API + Cron + 前端静态资源
 
 # 纯函数自测
 npx esbuild test/quick.ts --bundle --format=esm --platform=node --outfile=/tmp/quick.mjs && node /tmp/quick.mjs
-
-# 前端
-cd ../pages && npm install
-npx wrangler pages deploy                 # 读取 wrangler.jsonc 的 pages_build_output_dir
 ```
 
 部署需要 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID` 环境变量。
@@ -130,42 +120,30 @@ npx wrangler kv key delete --namespace-id ****** config --remote
 
 ## 安全提示
 
-- Cookie 与推送令牌保存在你自己的 Cloudflare KV 中；管理页面务必使用 HTTPS（Pages 默认提供）。
+- Cookie 与推送令牌保存在你自己的 Cloudflare KV 中；管理页面务必使用 HTTPS（worker.dev / 自定义域名默认提供）。
 - 建议开启两步验证；登录失败连续 5 次会临时锁定来源 IP。
 - Worker 的 API 仅接受已登录会话（首次设置接口在初始化后自动关闭）。
 
 ## 部署
 
-### 一键部署后端（推荐）
+### 一键部署（推荐）
 
 1. **先 Fork** 本仓库。
 2. 点击顶部的 **Deploy to Cloudflare** 按钮，在 Cloudflare 授权页同意所需权限。
-3. Cloudflare 会克隆你的 Fork、自动创建 KV 命名空间、部署 Worker（含每分钟 Cron），并把新资源的 id 回填到配置里。
+3. Cloudflare 会克隆你的 Fork、自动创建 KV 命名空间、部署整个应用（API + Cron + 前端），并把新资源的 id 回填到配置里。
 
-### 手动部署后端
+### 手动部署
 
 ```bash
 cd worker && npm install
 npx wrangler kv namespace create MIYO_KV      # 复制返回的 id
 # 把 id 填进 worker/wrangler.jsonc 的 kv_namespaces[0].id
-npx wrangler deploy
+npx wrangler deploy                            # 一次部署：API + Cron + 前端静态资源
 ```
 
-### 部署前端（Pages）
+### 绑定自定义域名（可选）
 
-「Deploy to Cloudflare」按钮不支持 Pages，前端需要单独部署一次：
-
-**方式 A：Dashboard 连接 Git**
-Workers & Pages → Create → Pages → 连接你的 Fork，Build output directory 填 `pages/public`。
-
-**方式 B：命令行**
-```bash
-cd pages && npm install
-# 把 functions/api/[[path]].ts 的 DEFAULT_API_ORIGIN 改成你的 Worker 地址
-npx wrangler pages deploy
-```
-
-建议再给 Pages 项目配置 **Service binding**（变量名 `API`，指向 Worker）：这样浏览器只访问 Pages 域名，由 Cloudflare 内部调用 Worker，不依赖 `workers.dev`。未配置时会回退到 `DEFAULT_API_ORIGIN`。
+给 Worker 绑定域名即可，无需 Pages：Dashboard → Workers & Pages → 选择该 Worker → Settings → Domains & Routes → 添加 Custom Domain；或加一条 Worker Route（`your.domain/*` → 该 Worker，并在 DNS 建一条代理记录）。
 
 ### 需要替换的占位符
 
@@ -174,8 +152,7 @@ npx wrangler pages deploy
 | 位置 | 内容 |
 | --- | --- |
 | `worker/wrangler.jsonc` | `kv_namespaces[0].id`（一键部署会自动创建并回填） |
-| `pages/functions/api/[[path]].ts` | `DEFAULT_API_ORIGIN` |
-| `worker/wrangler.jsonc` / `pages/wrangler.jsonc` | `name`、服务绑定 `service` |
+| `worker/wrangler.jsonc` | `name`（你的 Worker 名称） |
 
 命令行部署需要 `CLOUDFLARE_API_TOKEN` 与 `CLOUDFLARE_ACCOUNT_ID` 环境变量。
 

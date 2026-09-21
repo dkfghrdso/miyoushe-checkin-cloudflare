@@ -458,9 +458,7 @@ async function checkCookie(config: AppConfig, cookie: string, gameKey: string) {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === "/" || url.pathname === "") {
-      return json({ ok: true, service: "miyoushe-api", hint: "This Worker only serves /api/*. The frontend is hosted on Pages." });
-    }
+    // Static assets (the admin UI) are served by the assets binding, so only /api/* reaches the Worker.
     if (!url.pathname.startsWith("/api/")) return fail("Not found", 404);
     try {
       return await handleApi(env, request);

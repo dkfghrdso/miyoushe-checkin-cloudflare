@@ -3,6 +3,12 @@
   "name": "miyoushe-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-21",
+  "assets": {
+    // 前端静态资源由同一个 Worker 托管：/api/* 走 Worker，其余由静态资源处理。
+    // html_handling 默认 auto-trailing-slash：/login 会映射到 login.html。
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash"
+  },
   "observability": {
     "enabled": true,
     "logs": { "enabled": true },
