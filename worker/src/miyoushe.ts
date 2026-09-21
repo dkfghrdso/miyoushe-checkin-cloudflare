@@ -181,12 +181,16 @@ export class MiyousheClient {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-function errorResult(userId: string, userName: string, gameName: string, error: unknown): Result {
+function errorResult(userId: string, userName: string, gameName: string, error: unknown, server: "cn" | "os" = "cn"): Result {
   if (error instanceof CookieExpiredError) {
     return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "cookie_expired", message: error.message };
   }
   if (error instanceof NoGameRoleError) {
-    return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "skipped", message: `${error.message}；请确认 Cookie 包含 account_id/cookie_token，且账号已绑定该游戏` };
+    const hint =
+      server === "os"
+        ? "；请确认该账号已在游戏内创建角色"
+        : "；请确认 Cookie 包含 account_id/cookie_token，且账号已绑定该游戏";
+    return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "skipped", message: `${error.message}${hint}` };
   }
   if (error instanceof ApiError) {
     return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "failed", message: error.message };
@@ -236,7 +240,7 @@ export async function runSingleUser(user: CheckinUser, timeoutSeconds = 20, dela
           throw error;
         }
       } catch (error) {
-        results.push(errorResult(userId, userName, game.name, error));
+        results.push(errorResult(userId, userName, game.name, error, "os"));
       }
       if (delaySeconds > 0) await sleep(delaySeconds * 1000);
     }
