@@ -88,7 +88,10 @@
       ".theme-bar .btn2{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:8px;padding:6px 12px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}" +
       ".theme-bar .btn2:hover{border-color:var(--primary);color:var(--primary)}" +
       ".theme-bar .btn2:focus-visible,.theme-bar .preset:focus-visible{outline:2px solid var(--primary);outline-offset:2px}" +
+      ".theme-bar .toggle{margin-left:auto}" +
+      ".theme-bar.collapsed .presets,.theme-bar.collapsed .custom,.theme-bar.collapsed .reset,.theme-bar.collapsed .theme-panel{display:none}" +
       ".theme-panel{flex-basis:100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px 14px;margin-top:6px;padding-top:10px;border-top:1px dashed var(--line)}" +
+      ".theme-panel[hidden]{display:none}" +
       ".theme-panel label{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0;font-size:12px;font-weight:500;color:var(--ink)}" +
       ".theme-panel input[type=color]{width:34px;height:26px;min-height:0;padding:0;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer}";
     document.head.appendChild(style);
@@ -98,8 +101,11 @@
     bar.innerHTML = '<span class="tt">配色</span><span class="presets"></span>' +
       '<button type="button" class="btn2 custom">自定义颜色</button>' +
       '<button type="button" class="btn2 reset">默认</button>' +
+      '<button type="button" class="btn2 toggle" aria-expanded="true">收起</button>' +
       '<div class="theme-panel" hidden></div>';
-    main.insertBefore(bar, main.firstChild);
+    var topline = main.querySelector(".topline");
+    if (topline) main.insertBefore(bar, topline.nextSibling);
+    else main.insertBefore(bar, main.firstChild);
 
     var presetWrap = bar.querySelector(".presets");
     Object.keys(PRESETS).forEach(function (name) {
@@ -151,6 +157,21 @@
       panel.hidden = true;
       mark();
     });
+
+    var COLLAPSE_KEY = "miyo-theme-collapsed";
+    var toggleBtn = bar.querySelector(".toggle");
+    function setCollapsed(collapsed) {
+      bar.classList.toggle("collapsed", collapsed);
+      toggleBtn.textContent = collapsed ? "展开" : "收起";
+      toggleBtn.setAttribute("aria-expanded", String(!collapsed));
+      try { localStorage.setItem(COLLAPSE_KEY, collapsed ? "1" : "0"); } catch (e) {}
+    }
+    toggleBtn.addEventListener("click", function () {
+      setCollapsed(!bar.classList.contains("collapsed"));
+    });
+    var savedCollapsed = null;
+    try { savedCollapsed = localStorage.getItem(COLLAPSE_KEY); } catch (e) {}
+    setCollapsed(savedCollapsed === "1");
 
     current = window.MiyoTheme.get();
     mark();
