@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>米游社签到管理 - 登录</title>
+  <style>
+    :root{color-scheme:light;--bg:#FFF1F2;--card:#FFFFFF;--ink:#1F2430;--muted:#6B7280;--line:#FECDD3;--primary:#E11D48;--bad:#DC2626;--on-primary:#FFFFFF}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;width:90%;max-width:380px;box-shadow:0 3px 12px #00000055}
+    h1{font-size:20px;margin:0 0 8px;text-align:center}
+    .sub{color:var(--muted);font-size:13px;text-align:center;margin:0 0 16px}
+    label{display:block;font-weight:650;margin:12px 0 5px}
+    input{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
+    #code{letter-spacing:4px;text-align:center;font-size:18px}
+    button{width:100%;margin-top:18px;border:0;border-radius:8px;padding:11px;background:var(--primary);color:var(--on-primary,#fff);font-weight:650;cursor:pointer}
+    button:disabled{opacity:.6;cursor:default}
+    .err{margin-top:12px;color:var(--bad);font-size:13px;min-height:18px;text-align:center}
+    .muted{margin-top:14px;color:var(--muted);font-size:12px;text-align:center}
+    .hidden{display:none}
+    .hint{margin:2px 0 0;color:var(--muted);font-size:12px}
+  </style>
+  <script src="/theme.js"></script>
+</head>
+<body>
+  <form class="card" id="loginForm">
+    <h1>米游社签到管理</h1>
+    <p class="sub" id="subtitle">请登录</p>
+
+    <div id="step1">
+      <label for="username">用户名</label>
+      <input id="username" autocomplete="username" autofocus>
+      <label for="password">密码</label>
+      <input id="password" type="password" autocomplete="current-password">
+      <div id="confirmWrap" class="hidden">
+        <label for="password2">确认密码</label>
+        <input id="password2" type="password" autocomplete="new-password">
+      </div>
+    </div>
+
+    <div id="step2" class="hidden">
+      <label for="code">动态验证码</label>
+      <input id="code" inputmode="text" autocomplete="one-time-code" maxlength="20" placeholder="6 位验证码">
+      <p class="hint">也可输入一次性恢复码。</p>
+    </div>
+
+    <button type="submit" id="submitBtn">登录</button>
+    <div class="err" id="err"></div>
+    <div class="muted">Cookie 仅保存在你的 Cloudflare KV 中，请为站点启用 HTTPS。</div>
+  </form>
+  <script>
+    let pending = '';
+    let needsSetup = false;
+    const $ = id => document.getElementById(id);
+
+    async function post(url, body) {
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({}));
+      return { ok: r.ok && d.ok, status: r.status, data: d };
+    }
+
+    async function detectSetup() {
+      try {
+        const r = await fetch('/api/setup');
+        const d = await r.json().catch(() => ({}));
+        needsSetup = d.configured === false;
+      } catch (e) {
+        needsSetup = false;
+      }
+      if (needsSetup) {
+        $('subtitle').textContent = '首次使用，请创建管理账号';
+        $('confirmWrap').classList.remove('hidden');
+        $('submitBtn').textContent = '创建并登录';
+        $('password').setAttribute('autocomplete', 'new-password');
+      }
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const err = $('err');
+      err.textContent = '';
+      $('submitBtn').disabled = true;
+      try {
+        if (needsSetup) {
+          const password = $('password').value;
+          if (password.length < 6) { err.textContent = '密码至少 6 位'; return; }
+          if (password !== $('password2').value) { err.textContent = '两次输入的密码不一致'; return; }
+          const { ok, data } = await post('/api/setup', { username: $('username').value, password });
+          if (!ok) { err.textContent = data.message || '创建失败'; return; }
+          location.href = '/index.html?setup2fa=1';
+          return;
+        }
+        if (!pending) {
+          const { ok, data } = await post('/api/login', {
+            username: $('username').value,
+            password: $('password').value,
+          });
+          if (!ok) { err.textContent = data.message || '登录失败'; return; }
+          if (data.totp_required) {
+            pending = data.pending;
+            $('step1').classList.add('hidden');
+            $('step2').classList.remove('hidden');
+            $('submitBtn').textContent = '验证';
+            $('code').focus();
+            return;
+          }
+          location.href = data.setup_2fa ? '/index.html?setup2fa=1' : '/index.html';
+          return;
+        }
+        const { ok, data } = await post('/api/login/totp', {
+          pending,
+          code: $('code').value,
+        });
+        if (!ok) {
+          if (data.pending) pending = data.pending;
+          err.textContent = data.message || '验证码错误';
+          $('code').value = '';
+          return;
+        }
+        location.href = '/index.html';
+      } catch (e2) {
+        err.textContent = '网络错误，请重试';
+      } finally {
+        $('submitBtn').disabled = false;
+      }
+    });
+
+    detectSetup();
+  </script>
+</body>
+</html>

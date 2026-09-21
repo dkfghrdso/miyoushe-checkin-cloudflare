@@ -1,0 +1,32 @@
+{
+  "name": "miyoushe-checkin-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "qrcode-generator": "^1.4.4"
+  },
+  "cloudflare": {
+    "bindings": {
+      "MIYO_KV": {
+        "description": "签到数据存储（用户 Cookie、配置、会话、两步验证）。一键部署会自动创建。"
+      },
+      "PBKDF2_ITERATIONS": {
+        "description": "管理密码的 PBKDF2 迭代次数，默认 50000。免费版 CPU 限制 10ms，不建议调大。"
+      },
+      "TZ": {
+        "description": "定时签到的时区，例如 `Asia/Shanghai`。"
+      }
+    }
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "wrangler": "^4.135.0"
+  }
+}

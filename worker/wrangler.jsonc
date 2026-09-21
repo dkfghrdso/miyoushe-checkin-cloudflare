@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "miyoushe-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-21",
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true },
+    "traces": { "enabled": true }
+  },
+  "kv_namespaces": [
+    {
+      "binding": "MIYO_KV",
+      // 占位符：一键部署（Deploy to Cloudflare）会自动创建 KV 并回填 id；
+      // 手动部署请先运行 `wrangler kv namespace create MIYO_KV` 再填入返回的 id。
+      "id": "******"
+    }
+  ],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "vars": {
+    "TZ": "Asia/Shanghai",
+    "PBKDF2_ITERATIONS": "50000"
+  }
+}

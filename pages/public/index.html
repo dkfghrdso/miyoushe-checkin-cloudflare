@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>米游社签到管理</title>
+  <style>
+    :root{color-scheme:light;--bg:#FFF1F2;--card:#FFFFFF;--ink:#1F2430;--muted:#6B7280;--line:#FECDD3;--primary:#E11D48;--good:#16A34A;--bad:#DC2626;--warn:#F59E0B;--on-primary:#FFFFFF}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+    main{max-width:980px;margin:32px auto;padding:0 16px}h1{margin:0 0 6px;font-size:28px}h2{font-size:18px;margin:0 0 14px}h3{font-size:15px;margin:0 0 8px}p{color:var(--muted)}.note{background:color-mix(in srgb,var(--warn) 14%,var(--card));border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);border-radius:10px;padding:12px 14px;margin:18px 0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+    section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin:16px 0;box-shadow:0 3px 12px #00000055}
+    label{display:block;font-weight:650;margin:12px 0 5px}input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}textarea{min-height:92px;font-family:ui-monospace,monospace;font-size:12px}
+    button{border:0;border-radius:8px;padding:10px 14px;background:var(--primary);color:var(--on-primary,#fff);font-weight:650;cursor:pointer;margin:8px 6px 0 0}button.secondary{background:color-mix(in srgb,var(--primary) 16%,transparent);color:var(--primary)}button.danger{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);border:1px solid color-mix(in srgb,var(--bad) 40%,transparent)}button.success{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good);border:1px solid color-mix(in srgb,var(--good) 40%,transparent)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.check{display:flex;align-items:center;gap:8px;font-weight:500}.check input{width:auto}
+    .channel{border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0}.channel h3{margin:0 0 4px;font-size:15px}
+    .muted{color:var(--muted);font-size:12px}.status{padding:10px;border-radius:8px;margin-top:12px;white-space:pre-wrap}.status.good{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}.status.bad{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}.status.info{background:color-mix(in srgb,var(--primary) 12%,transparent);color:var(--ink)}
+    .user-card{border:1px solid var(--line);border-radius:10px;padding:14px;margin:10px 0;transition:box-shadow .2s}.user-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+    .user-card .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.user-card .name{font-weight:650;font-size:15px}.user-card .meta{color:var(--muted);font-size:12px;margin-top:4px}
+    .user-card .games{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.user-card .game-tag{background:color-mix(in srgb,var(--primary) 14%,transparent);color:var(--ink);padding:2px 8px;border-radius:4px;font-size:12px}
+    .empty-state{text-align:center;padding:40px 20px;color:var(--muted)}.empty-state .icon{font-size:48px;margin-bottom:12px}
+    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:none;justify-content:center;align-items:center;z-index:1000}.modal-overlay.active{display:flex}
+    .modal{background:var(--card);border-radius:14px;padding:24px;width:90%;max-width:500px;max-height:90vh;overflow-y:auto}
+    .modal .close{float:right;background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)}
+    .tabs{display:flex;gap:6px;margin:16px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px;box-shadow:0 3px 12px #00000055;flex-wrap:wrap}
+    .tabs button{flex:1 1 auto;min-width:96px;border:0;background:none;padding:10px 14px;cursor:pointer;font-weight:650;color:var(--muted);border-radius:9px;margin:0}
+    .tabs button.active{color:var(--on-primary,#fff);background:var(--primary);box-shadow:0 2px 6px #2563eb40}
+    .tab-content{display:none}.tab-content.active{display:block}
+    .qr{background:#fff;display:inline-block;padding:8px;border:1px solid var(--line);border-radius:8px}.qr svg{width:200px;height:200px;display:block}
+    pre.recovery{background:var(--bg);padding:12px;border-radius:8px;font-size:13px;line-height:1.8;user-select:all}
+    pre.run{background:var(--bg);padding:12px;border-radius:8px;font-size:12px;white-space:pre-wrap;max-height:280px;overflow:auto}
+    .add-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--bg);border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
+    .add-bar .plus{background:var(--primary);width:38px;height:38px;border-radius:50%;font-size:22px;line-height:1;padding:0;margin:0;display:inline-flex;align-items:center;justify-content:center}
+    .chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;font-weight:600;margin:0;cursor:pointer}
+    .chip:hover{border-color:var(--primary);color:var(--primary)}
+    .channel .type-badge{background:color-mix(in srgb,var(--primary) 14%,transparent);color:var(--ink);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:600}
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}@media(max-width:760px){.cards{grid-template-columns:1fr 1fr}}
+    .stat{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--card)}
+    .stat .k{color:var(--muted);font-size:12px}.stat .v{font-size:20px;font-weight:700;margin-top:4px}
+    table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-weight:600}
+    .badge{display:inline-block;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
+    .badge.success,.badge.already{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}.badge.failed,.badge.cookie_expired{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}.badge.skipped{background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--warn)}.badge.current{background:color-mix(in srgb,var(--primary) 16%,transparent);color:var(--ink)}
+    .day{font-weight:700;margin:16px 0 6px}
+    .help h3{margin-top:18px}
+  </style>
+  <script src="/theme.js"></script>
+</head>
+<body>
+<main>
+  <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <h1 style="margin:0">米游社自动签到管理</h1>
+    <button class="secondary" onclick="logout()">退出登录</button>
+  </div>
+  <p>Cloudflare Workers + Pages 版 · 定时签到由 Worker Cron 触发</p>
+  <div id="twofaReminder" class="note" style="display:none">
+    当前未启用两步验证，为保护签到凭据和账号，建议启用。
+    <span class="row" style="margin-top:8px">
+      <button onclick="gotoSetup2fa()">立即设置</button>
+      <button class="secondary" onclick="skip2faOnboarding()">稍后再说</button>
+    </span>
+  </div>
+
+  <div class="tabs">
+    <button class="active" data-tab="overview" onclick="switchTab('overview')">概览</button>
+    <button data-tab="users" onclick="switchTab('users')">用户管理</button>
+    <button data-tab="history" onclick="switchTab('history')">签到记录</button>
+    <button data-tab="push" onclick="switchTab('push')">推送管理</button>
+    <button data-tab="settings" onclick="switchTab('settings')">全局设置</button>
+    <button data-tab="security" onclick="switchTab('security')">安全</button>
+    <button data-tab="help" onclick="switchTab('help')">帮助</button>
+  </div>
+
+  <div id="tab-overview" class="tab-content active">
+    <section>
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">概览</h2>
+        <button class="secondary" onclick="loadOverview()">刷新</button>
+      </div>
+      <div class="cards" id="statCards"></div>
+      <div id="overviewLast"></div>
+      <div class="row" style="margin-top:8px">
+        <button onclick="runNow()">立即执行签到</button>
+        <button class="secondary" onclick="switchTab('users')">管理用户</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="tab-users" class="tab-content">
+    <section>
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">用户列表</h2>
+        <span class="row">
+          <button class="secondary" onclick="runNow()">立即执行签到</button>
+          <button onclick="showAddUser()">+ 添加用户</button>
+        </span>
+      </div>
+      <div id="userList"></div>
+      <div id="runState"></div>
+    </section>
+  </div>
+
+  <div id="tab-history" class="tab-content">
+    <section>
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">签到记录（最近 14 天）</h2>
+        <button class="secondary" onclick="loadHistory()">刷新</button>
+      </div>
+      <div id="historyBox"></div>
+    </section>
+  </div>
+
+  <div id="tab-push" class="tab-content">
+    <section>
+      <h2>推送渠道</h2>
+      <p>点模板一键添加常用渠道；点「＋」添加自定义 Webhook。启用后可按事件接收所有用户的签到结果。</p>
+      <div class="add-bar">
+        <button class="plus" title="添加自定义 Webhook" onclick="addChannel('webhook')">＋</button>
+        <button class="chip" onclick="addChannel('serverchan')">Server酱</button>
+        <button class="chip" onclick="addChannel('feishu')">飞书机器人</button>
+        <button class="chip" onclick="addChannel('dingtalk')">钉钉机器人</button>
+        <button class="chip" onclick="addChannel('telegram')">Telegram</button>
+      </div>
+      <div id="channels"></div>
+      <button onclick="saveGlobalConfig()">保存推送设置</button>
+      <div id="pushSaveState"></div>
+    </section>
+  </div>
+
+  <div id="tab-settings" class="tab-content">
+    <div class="grid">
+      <section>
+        <h2>运行设置</h2>
+        <label class="check"><input type="checkbox" id="scheduleEnabled"> 启用每日自动签到</label>
+        <label for="scheduleStartTime">统一签到时间（时区见下）</label><input id="scheduleStartTime" type="time" value="10:00">
+        <label for="scheduleJitter">随机抖动（± 秒）</label><input id="scheduleJitter" type="number" min="0" max="600" value="30">
+        <label for="timezone">时区</label><input id="timezone" value="Asia/Shanghai" placeholder="Asia/Shanghai">
+        <label for="timeoutSeconds">请求超时（秒）</label><input id="timeoutSeconds" type="number" min="5" max="60" value="20">
+        <label for="delaySeconds">签到间隔（秒）</label><input id="delaySeconds" type="number" min="0" max="10" value="1">
+        <button onclick="saveGlobalConfig()">保存设置</button>
+        <div id="globalSaveState"></div>
+      </section>
+      <section>
+        <h2>运行说明</h2>
+        <p>定时签到由 Cloudflare Worker 的 Cron 触发（每分钟检查一次），无需本地常驻程序。</p>
+        <p class="muted">所有账号使用同一个签到时间，并在该时间基础上前後随机浮动（±抖动秒）。若希望在非计划时间签到，可随时使用「概览 · 立即执行签到」。</p>
+      </section>
+    </div>
+  </div>
+
+  <div id="tab-security" class="tab-content">
+    <section>
+      <h2>两步验证</h2>
+      <div id="twofaStatus" class="status info">加载中…</div>
+      <div id="twofaActions" class="row" style="margin-top:10px"></div>
+      <div id="twofaPanel" style="margin-top:14px"></div>
+    </section>
+    <section>
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">登录会话</h2>
+        <button class="danger" onclick="logoutOthers()">退出其他所有设备</button>
+      </div>
+      <div id="sessionsBox"></div>
+    </section>
+    <section>
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">登录失败记录</h2>
+        <button class="secondary" onclick="loadSecurity()">刷新</button>
+      </div>
+      <div id="failuresBox"></div>
+    </section>
+  </div>
+
+  <div id="tab-help" class="tab-content">
+    <section class="help">
+      <h2>帮助</h2>
+      <h3>1. 获取米游社 Cookie</h3>
+      <p>电脑浏览器登录 <code>https://www.miyoushe.com/</code> → 按 F12 打开开发者工具 → Network → 刷新页面 → 任意请求的 Request Headers 里复制完整的 <code>Cookie</code> 值（含 <code>account_id</code>/<code>cookie_token</code> 等字段）。粘贴到「用户管理 · 添加用户」。</p>
+      <p class="muted">Cookie 属于登录凭据，切勿发给他人；程序中只保存在你自己的 Cloudflare KV。</p>
+      <h3>2. 签到结果含义</h3>
+      <table>
+        <tr><th>状态</th><th>含义</th></tr>
+        <tr><td><span class="badge success">success</span></td><td>签到成功</td></tr>
+        <tr><td><span class="badge already">already</span></td><td>今天已经签过</td></tr>
+        <tr><td><span class="badge skipped">skipped</span></td><td>没有找到对应角色 / 未绑定该游戏</td></tr>
+        <tr><td><span class="badge failed">failed</span></td><td>网络、接口变更、验证码或风控导致失败</td></tr>
+        <tr><td><span class="badge cookie_expired">cookie_expired</span></td><td>Cookie 失效，需要重新复制</td></tr>
+      </table>
+      <h3>3. 常见问题</h3>
+      <p><b>-10002 未查询到游戏角色</b>：Cookie 不含账号会话字段、已不是最新会话，或该账号未在米游社绑定对应游戏。请在米游社网页重新登录后复制最新 Cookie。</p>
+      <p><b>出现验证码 / 风控</b>：请停止自动任务，改用手动签到，不要尝试绕过。</p>
+      <p><b>Cookie 失效</b>：删除旧 Cookie 重新获取。不要在聊天/Issue/第三方网站粘贴 Cookie。</p>
+      <h3>4. 推送渠道</h3>
+      <p><b>Server酱</b>：填 SendKey；<b>飞书</b>：填机器人 Webhook，若开了签名再填密钥；<b>钉钉</b>：填 access_token 或完整 Webhook，开了关键词安全要填关键词，开了加签填密钥；<b>Telegram</b>：填 Bot Token 与 Chat ID（给 Bot 发一条消息后用 <code>getUpdates</code> 获取）；<b>自定义 Webhook</b>：填 URL，程序会 POST JSON（占位符 <code>{title}</code>、<code>{message}</code>、<code>{event}</code>、<code>{time}</code>）。</p>
+      <h3>5. 定时说明</h3>
+      <p>所有账号在同一天使用同一个随机时刻（基准时间 ± 抖动秒）批量执行；时间按「全局设置」里的时区计算。如当天已执行，不会重复执行。</p>
+    </section>
+  </div>
+</main>
+
+<div id="userModal" class="modal-overlay">
+  <div class="modal">
+    <button class="close" onclick="closeUserModal()">&times;</button>
+    <h2 id="userModalTitle">添加用户</h2>
+    <input type="hidden" id="editUserId">
+    <label for="userName">用户名称</label><input id="userName" placeholder="如：我的账号">
+    <label for="userCookie">米游社 Cookie</label><textarea id="userCookie" placeholder="粘贴浏览器请求头中的完整 Cookie"></textarea>
+    <div class="row">
+      <div style="flex:1"><label for="checkGame">检测游戏</label><select id="checkGame"></select></div>
+      <div style="padding-top:22px"><button class="secondary" onclick="checkUserCookie()">检测 Cookie</button></div>
+    </div>
+    <div id="cookieCheckState" class="status info" style="display:none"></div>
+    <label>签到游戏</label><div id="userGames"></div>
+    <p class="muted" style="margin-top:12px">签到时间由「全局设置」统一控制，所有账号在同一随机时刻执行。</p>
+    <div class="row" style="margin-top:16px">
+      <button onclick="saveUser()">保存</button>
+      <button class="secondary" onclick="closeUserModal()">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let globalConfig = {};
+let users = [];
+const $ = id => document.getElementById(id);
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function status(el, text, kind = 'info') { el.textContent = text; el.className = 'status ' + kind; el.style.display = 'block'; }
+function fmtTime(iso, tz) {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('zh-CN', { timeZone: tz || 'Asia/Shanghai', hour12: false }); }
+  catch (e) { return iso; }
+}
+async function api(url, opts = {}) {
+  let r = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (r.status === 401) { location.href = '/login.html'; throw Error('未登录或会话已过期'); }
+  let d = await r.json();
+  if (!r.ok) throw Error(d.message || '请求失败');
+  return d;
+}
+
+async function logout() {
+  try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+  location.href = '/login.html';
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  $('tab-' + name).classList.add('active');
+  if (name === 'overview') loadOverview();
+  if (name === 'history') loadHistory();
+  if (name === 'security') loadSecurity();
+}
+
+const SETUP_2FA = new URLSearchParams(location.search).get('setup2fa') === '1';
+
+async function load() {
+  try {
+    const [configRes, usersRes] = await Promise.all([api('/api/config'), api('/api/users')]);
+    globalConfig = configRes;
+    users = usersRes.users || [];
+    renderUsers();
+    renderGlobalSettings();
+    renderChannels();
+    renderGameSelects();
+    renderLastRun();
+    await Promise.all([loadOverview(), loadHistory(), loadSecurity(), load2faStatus()]);
+    if (SETUP_2FA && !twofa.enabled) showSetup2faReminder();
+  } catch (e) {
+    console.error('加载失败:', e);
+  }
+}
+
+// ── 概览 ──────────────────────────────────────────────────────────────────────
+
+async function loadOverview() {
+  try {
+    const d = await api('/api/dashboard');
+    const s = d.dashboard;
+    const tz = s.timezone || 'Asia/Shanghai';
+    const schedule = s.schedule || {};
+    const cards = [
+      { k: '账号数量', v: `${s.users_count}` },
+      { k: '已配置 Cookie', v: `${s.active_users}` },
+      { k: '自动签到', v: schedule.enabled === false ? '已关闭' : '已启用' },
+      { k: '下次签到', v: s.next_run ? fmtTime(s.next_run, tz) : (schedule.enabled === false ? '—' : `每天 ${schedule.start_time || '10:00'} ±${schedule.jitter_seconds ?? 0}s`) },
+    ];
+    $('statCards').innerHTML = cards.map(c => `<div class="stat"><div class="k">${esc(c.k)}</div><div class="v">${esc(c.v)}</div></div>`).join('');
+    const last = s.last_run;
+    if (last) {
+      const counts = {};
+      (last.results || []).forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1; });
+      const summary = Object.entries(counts).map(([k, v]) => `${k}×${v}`).join('，') || '无结果';
+      status($('overviewLast'), `最近一次：${fmtTime(last.at, tz)}（${last.triggered_by === 'cron' ? '定时' : '手动'}）\n${summary}`, 'info');
+    } else {
+      $('overviewLast').innerHTML = '<div class="status info">还没有执行记录。添加用户后可点「立即执行签到」。</div>';
+    }
+  } catch (e) { console.error(e); }
+}
+
+// ── 用户管理 ──────────────────────────────────────────────────────────────────
+
+function renderUsers() {
+  const el = $('userList');
+  if (!users.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#128100;</div><p>还没有添加用户<br>点击上方"添加用户"开始</p></div>';
+    return;
+  }
+  el.innerHTML = users.map(u => {
+    const games = (u.games || []).map(g => {
+      const name = (globalConfig.games_available || {})[g] || g;
+      return `<span class="game-tag">${esc(name)}</span>`;
+    }).join('');
+    const schedule = globalConfig.schedule || {};
+    const scheduleInfo = schedule.enabled !== false
+      ? `每天 ${schedule.start_time || '10:00'} ± ${schedule.jitter_seconds ?? 30}秒（全部账号统一）`
+      : '未启用自动签到';
+    return `<div class="user-card">
+      <div class="header">
+        <span class="name">${esc(u.name)}</span>
+        <span class="row">
+          <button class="secondary" onclick="showEditUser('${esc(u.id)}')">编辑</button>
+          <button class="danger" onclick="deleteUser('${esc(u.id)}','${esc(u.name)}')">删除</button>
+        </span>
+      </div>
+      <div class="meta">Cookie: ${u.cookie_configured ? '已配置' : '未配置'} | ${esc(scheduleInfo)}</div>
+      <div class="games">${games || '<span class="muted">未选择游戏</span>'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderLastRun() {
+  const last = globalConfig.last_run;
+  if (!last) { $('runState').innerHTML = ''; return; }
+  const rows = (last.results || []).map(r => `[${esc(r.status)}] ${esc(r.user_name)} / ${esc(r.game)} / ${esc(r.role)}：${esc(r.message)}`).join('\n');
+  status($('runState'), `上次执行：${esc(last.at)}（${last.triggered_by === 'cron' ? '定时' : '手动'}）\n${rows || '无结果'}`, 'info');
+}
+
+async function runNow() {
+  if (!confirm('立即执行一次签到？这不会改变每日随机时间。')) return;
+  status($('runState'), '正在执行签到，请稍候…', 'info');
+  try {
+    const d = await api('/api/run', { method: 'POST' });
+    const rows = (d.summary.results || []).map(r => `[${r.status}] ${r.user_name} / ${r.game} / ${r.role}：${r.message}`).join('\n');
+    const extra = (d.notify_errors && d.notify_errors.length) ? `\n通知失败：${d.notify_errors.join('；')}` : '';
+    status($('runState'), `执行完成（${d.summary.at}）\n${rows || '无结果'}${extra}`, 'good');
+    await load();
+    switchTab('users');
+  } catch (e) {
+    status($('runState'), e.message, 'bad');
+  }
+}
+
+// ── 签到记录 ──────────────────────────────────────────────────────────────────
+
+async function loadHistory() {
+  const box = $('historyBox');
+  box.innerHTML = '<div class="status info">加载中…</div>';
+  try {
+    const d = await api('/api/history?days=14');
+    const tz = globalConfig.timezone || 'Asia/Shanghai';
+    const days = d.days || [];
+    if (!days.length) { box.innerHTML = '<div class="empty-state"><div class="icon">&#128203;</div><p>暂无签到记录</p></div>'; return; }
+    box.innerHTML = days.map(day => {
+      const runs = day.runs.map(run => {
+        const rows = (run.results || []).map(r =>
+          `<tr><td>${esc(r.user_name)}</td><td>${esc(r.game)}</td><td>${esc(r.role)}</td><td><span class="badge ${esc(r.status)}">${esc(r.status)}</span></td><td>${esc(r.message)}</td></tr>`
+        ).join('');
+        return `<div class="muted" style="margin:8px 0 4px">${esc(fmtTime(run.at, tz))} · ${run.triggered_by === 'cron' ? '定时' : '手动'}</div>
+          <table><tr><th>用户</th><th>游戏</th><th>角色</th><th>状态</th><th>说明</th></tr>${rows || '<tr><td colspan="5" class="muted">无结果</td></tr>'}</table>`;
+      }).join('');
+      return `<div class="day">${esc(day.date)}</div>${runs}`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = '';
+    status(box, e.message, 'bad');
+  }
+}
+
+// ── 通知渠道 ──────────────────────────────────────────────────────────────────
+
+function renderChannels() {
+  const channels = globalConfig.notifications || [];
+  const el = $('channels');
+  if (!channels.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#128276;</div><p>还没有推送渠道<br>点上面的模板或「＋」添加</p></div>';
+    return;
+  }
+  el.innerHTML = channels.map((c, i) => channelHtml(c, i)).join('');
+}
+
+const CHANNEL_TYPES = { serverchan: 'Server酱', feishu: '飞书机器人', dingtalk: '钉钉机器人', telegram: 'Telegram', webhook: '通用 Webhook' };
+
+function channelTemplate(type) {
+  const events = ['success', 'failed', 'cookie_expired'];
+  if (type === 'serverchan') return { enabled: true, type, sendkey: '', events };
+  if (type === 'feishu') return { enabled: true, type, webhook_url: '', secret: '', events };
+  if (type === 'dingtalk') return { enabled: true, type, access_token: '', webhook_url: '', keyword: '', secret: '', events };
+  if (type === 'telegram') return { enabled: true, type, bot_token: '', chat_id: '', events };
+  return { enabled: true, type: 'webhook', url: '', headers: {}, body: { title: '{title}', content: '{message}', event: '{event}', time: '{time}' }, events };
+}
+
+function addChannel(type) {
+  globalConfig.notifications = globalConfig.notifications || [];
+  globalConfig.notifications.push(channelTemplate(type));
+  renderChannels();
+  const cards = document.querySelectorAll('#channels .channel');
+  const last = cards[cards.length - 1];
+  if (last) { last.scrollIntoView({ behavior: 'smooth', block: 'center' }); last.querySelector('input')?.focus(); }
+}
+
+function channelHtml(c, i) {
+  let type = c.type || 'webhook';
+  let name = CHANNEL_TYPES[type] || type;
+  return `<div class="channel" data-channel="${i}"><div class="row" style="justify-content:space-between"><span class="row"><span class="type-badge">${esc(name)}</span><label class="check"><input type="checkbox" data-field="enabled" ${c.enabled ? 'checked' : ''}> 启用</label></span><span class="row"><button class="secondary" onclick="testChannel(${i})">测试</button><button class="danger" onclick="removeChannel(${i})">删除</button></span></div><input type="hidden" data-field="type" value="${esc(type)}">${fieldsFor(type, c)}<label>通知事件（逗号分隔）</label><input data-field="events" value="${esc((c.events || ['success', 'failed', 'cookie_expired']).join(','))}"></div>`;
+}
+
+function fieldsFor(t, c) {
+  if (t === 'serverchan') return `<label>SendKey</label><input type="password" data-field="sendkey" value="${esc(c.sendkey || '')}">`;
+  if (t === 'feishu') return `<label>Webhook 地址</label><input data-field="webhook_url" value="${esc(c.webhook_url || '')}"><label>签名密钥（可选）</label><input type="password" data-field="secret" value="${esc(c.secret || '')}">`;
+  if (t === 'dingtalk') return `<label>Access Token（或填写完整 Webhook 地址）</label><input type="password" data-field="access_token" value="${esc(c.access_token || '')}"><label>完整 Webhook 地址（可选）</label><input data-field="webhook_url" value="${esc(c.webhook_url || '')}"><label>安全关键词（如已配置关键词安全必填）</label><input data-field="keyword" value="${esc(c.keyword || '')}"><label>加签密钥（可选）</label><input type="password" data-field="secret" value="${esc(c.secret || '')}">`;
+  if (t === 'telegram') return `<label>Bot Token</label><input type="password" data-field="bot_token" value="${esc(c.bot_token || '')}"><label>Chat ID</label><input data-field="chat_id" value="${esc(c.chat_id || '')}">`;
+  return `<label>URL</label><input data-field="url" value="${esc(c.url || '')}">`;
+}
+
+function collectChannel(box) {
+  let o = {};
+  box.querySelectorAll('[data-field]').forEach(x => {
+    o[x.dataset.field] = x.type === 'checkbox' ? x.checked : x.value;
+  });
+  o.events = String(o.events || '').split(',').map(x => x.trim()).filter(Boolean);
+  return o;
+}
+
+function collectGlobalConfig() {
+  let notifications = [...document.querySelectorAll('[data-channel]')].map(collectChannel);
+  return {
+    timeout_seconds: Math.max(5, Number($('timeoutSeconds').value) || 20),
+    delay_seconds: Math.max(0, Number($('delaySeconds').value) || 1),
+    timezone: $('timezone').value.trim() || 'Asia/Shanghai',
+    schedule: {
+      enabled: $('scheduleEnabled').checked,
+      start_time: $('scheduleStartTime').value || '10:00',
+      jitter_seconds: Math.max(0, Math.min(600, Number($('scheduleJitter').value) || 0)),
+    },
+    notifications,
+  };
+}
+
+async function saveGlobalConfig() {
+  try {
+    let d = await api('/api/config', { method: 'POST', body: JSON.stringify(collectGlobalConfig()) });
+    status($('globalSaveState'), d.message, 'good');
+    status($('pushSaveState'), d.message, 'good');
+    await load();
+  } catch (e) {
+    status($('globalSaveState'), e.message, 'bad');
+    status($('pushSaveState'), e.message, 'bad');
+  }
+}
+
+function renderGlobalSettings() {
+  const schedule = globalConfig.schedule || {};
+  $('scheduleEnabled').checked = schedule.enabled !== false;
+  $('scheduleStartTime').value = schedule.start_time || '10:00';
+  $('scheduleJitter').value = schedule.jitter_seconds ?? 30;
+  $('timezone').value = globalConfig.timezone || 'Asia/Shanghai';
+  $('timeoutSeconds').value = globalConfig.timeout_seconds || 20;
+  $('delaySeconds').value = globalConfig.delay_seconds || 1;
+}
+
+function renderGameSelects() {
+  const opts = Object.entries(globalConfig.games_available || {}).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('');
+  $('checkGame').innerHTML = opts;
+}
+
+// ── 安全 ──────────────────────────────────────────────────────────────────────
+
+async function loadSecurity() {
+  try {
+    const d = await api('/api/security');
+    const tz = globalConfig.timezone || 'Asia/Shanghai';
+    const sessions = d.sessions || [];
+    const rows = sessions.map(s => `<tr><td>${esc(s.id)}…</td><td>${esc(s.username || '—')}</td><td>${s.created ? esc(fmtTime(new Date(s.created).toISOString(), tz)) : '—'}</td><td>${s.current ? '<span class="badge current">当前</span>' : ''}</td></tr>`).join('');
+    $('sessionsBox').innerHTML = sessions.length
+      ? `<table><tr><th>会话</th><th>账号</th><th>登录时间</th><th></th></tr>${rows}</table>`
+      : '<div class="muted">暂无会话</div>';
+    const failures = d.login_failures || [];
+    $('failuresBox').innerHTML = failures.length
+      ? `<table><tr><th>来源 IP</th><th>失败次数</th></tr>${failures.map(f => `<tr><td>${esc(f.ip)}</td><td>${esc(f.count)}</td></tr>`).join('')}</table><p class="muted">连续失败 5 次会锁定该 IP 5 分钟。</p>`
+      : '<div class="muted">最近没有登录失败记录。</div>';
+  } catch (e) { console.error(e); }
+}
+
+async function logoutOthers() {
+  if (!confirm('确定退出其他所有设备的登录吗？当前设备会保留。')) return;
+  try {
+    const d = await api('/api/security/logout-others', { method: 'POST' });
+    alert(d.message);
+    loadSecurity();
+  } catch (e) { alert(e.message); }
+}
+
+// ── 用户编辑 ──────────────────────────────────────────────────────────────────
+
+function showAddUser() {
+  $('userModalTitle').textContent = '添加用户';
+  $('editUserId').value = '';
+  $('userName').value = '';
+  $('userCookie').value = '';
+  $('cookieCheckState').style.display = 'none';
+  renderUserGames([]);
+  $('userModal').classList.add('active');
+}
+
+function showEditUser(id) {
+  const user = users.find(u => u.id === id);
+  if (!user) return;
+  $('userModalTitle').textContent = '编辑用户';
+  $('editUserId').value = id;
+  $('userName').value = user.name || '';
+  $('userCookie').value = '';
+  $('cookieCheckState').style.display = 'none';
+  renderUserGames(user.games || []);
+  $('userModal').classList.add('active');
+}
+
+function closeUserModal() { $('userModal').classList.remove('active'); }
+
+function renderUserGames(selected) {
+  $('userGames').innerHTML = Object.entries(globalConfig.games_available || {}).map(([k, n]) =>
+    `<label class="check"><input type="checkbox" data-user-game="${k}" ${selected.includes(k) ? 'checked' : ''}> ${esc(n)}</label>`
+  ).join('');
+}
+
+async function saveUser() {
+  const id = $('editUserId').value;
+  const games = [...document.querySelectorAll('[data-user-game]:checked')].map(x => x.dataset.userGame);
+  const data = { name: $('userName').value.trim() || '未命名用户', cookie: $('userCookie').value.trim(), games };
+  try {
+    if (id) {
+      if (!data.cookie) delete data.cookie;
+      await api(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    } else {
+      if (!data.cookie) throw Error('请填写 Cookie');
+      await api('/api/users', { method: 'POST', body: JSON.stringify(data) });
+    }
+    closeUserModal();
+    await load();
+  } catch (e) { alert(e.message); }
+}
+
+async function deleteUser(id, name) {
+  if (!confirm(`确定要删除用户「${name}」吗？`)) return;
+  try {
+    await api(`/api/users/${id}`, { method: 'DELETE' });
+    await load();
+  } catch (e) { alert(e.message); }
+}
+
+async function checkUserCookie() {
+  const id = $('editUserId').value;
+  const cookie = $('userCookie').value.trim();
+  const game = $('checkGame').value;
+  const el = $('cookieCheckState');
+  try {
+    if (id) {
+      const d = await api(`/api/users/${id}/check-cookie`, { method: 'POST', body: JSON.stringify({ cookie, game }) });
+      status(el, d.message, d.ok ? 'good' : 'bad');
+    } else {
+      if (!cookie) { status(el, '请先填写 Cookie', 'bad'); return; }
+      const d = await api('/api/check-cookie', { method: 'POST', body: JSON.stringify({ cookie, game }) });
+      status(el, d.message, d.ok ? 'good' : 'bad');
+    }
+  } catch (e) { status(el, e.message, 'bad'); }
+}
+
+function removeChannel(i) {
+  let ch = globalConfig.notifications || [];
+  ch.splice(i, 1);
+  globalConfig.notifications = ch;
+  renderChannels();
+}
+
+async function testChannel(i) {
+  const box = document.querySelector(`[data-channel="${i}"]`);
+  const channel = box ? collectChannel(box) : undefined;
+  try {
+    let d = await api('/api/test-notification', { method: 'POST', body: JSON.stringify({ channel_index: i, channel }) });
+    alert(d.message);
+  } catch (e) { alert(e.message); }
+}
+
+// ── 两步验证 ──────────────────────────────────────────────────────────────────
+
+let twofa = { enabled: false, recovery_remaining: 0 };
+
+async function load2faStatus() {
+  try { twofa = await api('/api/2fa'); }
+  catch (e) { twofa = { enabled: false, recovery_remaining: 0 }; }
+  render2fa();
+}
+
+function render2fa() {
+  const st = $('twofaStatus');
+  if (twofa.enabled) { st.className = 'status good'; st.textContent = `已启用（剩余恢复码 ${twofa.recovery_remaining} 个）`; }
+  else { st.className = 'status info'; st.textContent = '未启用'; }
+  $('twofaActions').innerHTML = twofa.enabled
+    ? `<button class="secondary" onclick="openRecoveryRegen()">重新生成恢复码</button><button class="danger" onclick="open2faDisable()">关闭两步验证</button>`
+    : `<button onclick="open2faEnable()">启用两步验证</button>`;
+  $('twofaPanel').innerHTML = '';
+}
+
+function t2panel(html) { $('twofaPanel').innerHTML = html; }
+function showT2Err(msg) { const el = $('t2err'); if (el) { el.textContent = msg; el.style.display = 'block'; } else { alert(msg); } }
+
+function open2faEnable(onboarding = false) {
+  t2panel(`
+    ${onboarding ? '<div class="status info">当前未启用两步验证。建议启用 TOTP 为签到凭据和账号再加一道保护。</div>' : ''}
+    <label>输入当前登录密码以生成二维码</label>
+    <input id="t2pass" type="password" autocomplete="current-password">
+    <div class="row" style="margin-top:10px">
+      <button onclick="begin2faSetup()">生成二维码</button>
+      <button class="secondary" onclick="render2fa()">取消</button>
+    </div>
+    <div id="t2err" class="status bad" style="display:none"></div>`);
+  $('t2pass').focus();
+}
+
+function clearSetup2faFlag() { if (location.search) history.replaceState(null, '', location.pathname); }
+function showSetup2faReminder() { $('twofaReminder').style.display = 'block'; }
+function hideSetup2faReminder() { $('twofaReminder').style.display = 'none'; }
+
+function gotoSetup2fa() {
+  hideSetup2faReminder();
+  switchTab('security');
+  const section = $('twofaStatus').closest('section');
+  if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  open2faEnable(true);
+}
+
+function skip2faOnboarding() { clearSetup2faFlag(); hideSetup2faReminder(); render2fa(); }
+
+async function begin2faSetup() {
+  try {
+    const d = await api('/api/2fa/setup', { method: 'POST', body: JSON.stringify({ password: $('t2pass').value }) });
+    const qr = d.qr_svg ? `<div class="qr">${d.qr_svg}</div>` : `<p class="muted">无法显示二维码，请在验证器中手动输入密钥。</p>`;
+    t2panel(`
+      <p>用验证器 App 扫码，或手动输入密钥：</p>
+      ${qr}
+      <p class="muted">密钥：<code>${esc(d.secret)}</code></p>
+      <label>输入 App 当前显示的 6 位验证码</label>
+      <input id="t2code" inputmode="numeric" autocomplete="one-time-code">
+      <div class="row" style="margin-top:10px">
+        <button onclick="confirm2faSetup('${d.setup_token}')">确认启用</button>
+        <button class="secondary" onclick="render2fa()">取消</button>
+      </div>
+      <div id="t2err" class="status bad" style="display:none"></div>`);
+    $('t2code').focus();
+  } catch (e) { showT2Err(e.message); }
+}
+
+async function confirm2faSetup(token) {
+  try {
+    const d = await api('/api/2fa/enable', { method: 'POST', body: JSON.stringify({ setup_token: token, code: $('t2code').value }) });
+    clearSetup2faFlag();
+    hideSetup2faReminder();
+    t2panel(`<div class="status good">两步验证已启用。请立即保存以下恢复码，每个只能用一次：</div><pre class="recovery">${d.recovery_codes.map(c => esc(c)).join('\n')}</pre><button onclick="afterRecovery()">我已保存</button>`);
+  } catch (e) { showT2Err(e.message); }
+}
+
+function open2faDisable() {
+  t2panel(`<p>关闭两步验证需要验证当前密码和动态验证码。</p><label>当前密码</label><input id="t2pass" type="password"><label>动态验证码或恢复码</label><input id="t2code" autocomplete="one-time-code"><div class="row" style="margin-top:10px"><button class="danger" onclick="do2faDisable()">确认关闭</button><button class="secondary" onclick="render2fa()">取消</button></div><div id="t2err" class="status bad" style="display:none"></div>`);
+}
+
+async function do2faDisable() {
+  try {
+    await api('/api/2fa/disable', { method: 'POST', body: JSON.stringify({ password: $('t2pass').value, code: $('t2code').value }) });
+    await load2faStatus();
+    t2panel(`<div class="status good">已关闭两步验证。</div>`);
+  } catch (e) { showT2Err(e.message); }
+}
+
+function openRecoveryRegen() {
+  t2panel(`<p>重新生成后，旧的恢复码将全部失效。</p><label>当前密码</label><input id="t2pass" type="password"><label>动态验证码或恢复码</label><input id="t2code" autocomplete="one-time-code"><div class="row" style="margin-top:10px"><button onclick="doRecoveryRegen()">生成新的恢复码</button><button class="secondary" onclick="render2fa()">取消</button></div><div id="t2err" class="status bad" style="display:none"></div>`);
+}
+
+async function doRecoveryRegen() {
+  try {
+    const d = await api('/api/2fa/recovery', { method: 'POST', body: JSON.stringify({ password: $('t2pass').value, code: $('t2code').value }) });
+    t2panel(`<div class="status good">已生成新的恢复码，请立即保存：</div><pre class="recovery">${d.recovery_codes.map(c => esc(c)).join('\n')}</pre><button onclick="afterRecovery()">我已保存</button>`);
+  } catch (e) { showT2Err(e.message); }
+}
+
+function afterRecovery() { load2faStatus(); }
+
+load();
+</script>
+</body></html>
