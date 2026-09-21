@@ -176,7 +176,8 @@
     <section class="help">
       <h2>帮助</h2>
       <h3>1. 获取米游社 Cookie</h3>
-      <p>电脑浏览器登录 <code>https://www.miyoushe.com/</code> → 按 F12 打开开发者工具 → Network → 刷新页面 → 任意请求的 Request Headers 里复制完整的 <code>Cookie</code> 值（含 <code>account_id</code>/<code>cookie_token</code> 等字段）。粘贴到「用户管理 · 添加用户」。</p>
+      <p>电脑浏览器登录 <code>https://www.miyoushe.com/</code> → 按 F12 打开开发者工具 → Network → 刷新页面 → 任意请求的 Request Headers 里复制完整的 <code>Cookie</code> 值（含 <code>account_id</code>/<code>cookie_token</code> 等字段）。粘贴到「用户管理 · 添加用户」，「服务器」选「国服」。</p>
+      <p><b>国际服（HoYoLAB）</b>：登录 <code>https://www.hoyolab.com/</code> → F12 → Application（应用）→ Cookies → 复制 <code>ltuid_v2</code>、<code>ltoken_v2</code>（如有 <code>ltmid_v2</code>、<code>account_id_v2</code> 也一并带上）组成完整 Cookie 字符串，添加用户时「服务器」选「国际服」。国际服按账号签到，不区分角色。</p>
       <p class="muted">Cookie 属于登录凭据，切勿发给他人；程序中只保存在你自己的 Cloudflare KV。</p>
       <h3>2. 签到结果含义</h3>
       <table>
@@ -205,7 +206,12 @@
     <h2 id="userModalTitle">添加用户</h2>
     <input type="hidden" id="editUserId">
     <label for="userName">用户名称</label><input id="userName" placeholder="如：我的账号">
-    <label for="userCookie">米游社 Cookie</label><textarea id="userCookie" placeholder="粘贴浏览器请求头中的完整 Cookie"></textarea>
+    <label for="userServer">服务器</label>
+    <select id="userServer" onchange="onServerChange()">
+      <option value="cn">国服（米游社）</option>
+      <option value="os">国际服（HoYoLAB）</option>
+    </select>
+    <label for="userCookie" id="cookieLabel">米游社 Cookie</label><textarea id="userCookie" placeholder="粘贴浏览器请求头中的完整 Cookie"></textarea>
     <div class="row">
       <div style="flex:1"><label for="checkGame">检测游戏</label><select id="checkGame"></select></div>
       <div style="padding-top:22px"><button class="secondary" onclick="checkUserCookie()">检测 Cookie</button></div>
@@ -308,17 +314,19 @@ function renderUsers() {
     return;
   }
   el.innerHTML = users.map(u => {
+    const src = (u.server === 'os') ? (globalConfig.os_games_available || {}) : (globalConfig.games_available || {});
     const games = (u.games || []).map(g => {
-      const name = (globalConfig.games_available || {})[g] || g;
+      const name = src[g] || g;
       return `<span class="game-tag">${esc(name)}</span>`;
     }).join('');
     const schedule = globalConfig.schedule || {};
     const scheduleInfo = schedule.enabled !== false
       ? `每天 ${schedule.start_time || '10:00'} ± ${schedule.jitter_seconds ?? 30}秒（全部账号统一）`
       : '未启用自动签到';
+    const serverTag = u.server === 'os' ? '国际服' : '国服';
     return `<div class="user-card">
       <div class="header">
-        <span class="name">${esc(u.name)}</span>
+        <span class="name">${esc(u.name)} <span class="game-tag">${serverTag}</span></span>
         <span class="row">
           <button class="secondary" onclick="showEditUser('${esc(u.id)}')">编辑</button>
           <button class="danger" onclick="deleteUser('${esc(u.id)}','${esc(u.name)}')">删除</button>
@@ -470,9 +478,10 @@ function renderGlobalSettings() {
   $('delaySeconds').value = globalConfig.delay_seconds || 1;
 }
 
-function renderGameSelects() {
-  const opts = Object.entries(globalConfig.games_available || {}).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('');
-  $('checkGame').innerHTML = opts;
+function renderGameSelects(server) {
+  server = server || 'cn';
+  const source = server === 'os' ? (globalConfig.os_games_available || {}) : (globalConfig.games_available || {});
+  $('checkGame').innerHTML = Object.entries(source).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('');
 }
 
 // ── 安全 ──────────────────────────────────────────────────────────────────────
@@ -504,12 +513,32 @@ async function logoutOthers() {
 
 // ── 用户编辑 ──────────────────────────────────────────────────────────────────
 
+function currentServer() { return $('userServer').value === 'os' ? 'os' : 'cn'; }
+
+function applyServerLabels() {
+  const server = currentServer();
+  $('cookieLabel').textContent = server === 'os' ? 'HoYoLAB Cookie' : '米游社 Cookie';
+  $('userCookie').placeholder = server === 'os'
+    ? '粘贴 HoYoLAB 的 Cookie（含 ltuid_v2、ltoken_v2 等）'
+    : '粘贴浏览器请求头中的完整 Cookie';
+}
+
+function onServerChange() {
+  applyServerLabels();
+  renderGameSelects(currentServer());
+  const checked = [...document.querySelectorAll('[data-user-game]:checked')].map(x => x.dataset.userGame);
+  renderUserGames(checked);
+}
+
 function showAddUser() {
   $('userModalTitle').textContent = '添加用户';
   $('editUserId').value = '';
   $('userName').value = '';
   $('userCookie').value = '';
+  $('userServer').value = 'cn';
   $('cookieCheckState').style.display = 'none';
+  applyServerLabels();
+  renderGameSelects('cn');
   renderUserGames([]);
   $('userModal').classList.add('active');
 }
@@ -517,19 +546,25 @@ function showAddUser() {
 function showEditUser(id) {
   const user = users.find(u => u.id === id);
   if (!user) return;
+  const server = user.server === 'os' ? 'os' : 'cn';
   $('userModalTitle').textContent = '编辑用户';
   $('editUserId').value = id;
   $('userName').value = user.name || '';
   $('userCookie').value = '';
+  $('userServer').value = server;
   $('cookieCheckState').style.display = 'none';
-  renderUserGames(user.games || []);
+  applyServerLabels();
+  renderGameSelects(server);
+  renderUserGames(user.games || [], server);
   $('userModal').classList.add('active');
 }
 
 function closeUserModal() { $('userModal').classList.remove('active'); }
 
-function renderUserGames(selected) {
-  $('userGames').innerHTML = Object.entries(globalConfig.games_available || {}).map(([k, n]) =>
+function renderUserGames(selected, server) {
+  server = server || currentServer();
+  const source = server === 'os' ? (globalConfig.os_games_available || {}) : (globalConfig.games_available || {});
+  $('userGames').innerHTML = Object.entries(source).map(([k, n]) =>
     `<label class="check"><input type="checkbox" data-user-game="${k}" ${selected.includes(k) ? 'checked' : ''}> ${esc(n)}</label>`
   ).join('');
 }
@@ -537,7 +572,7 @@ function renderUserGames(selected) {
 async function saveUser() {
   const id = $('editUserId').value;
   const games = [...document.querySelectorAll('[data-user-game]:checked')].map(x => x.dataset.userGame);
-  const data = { name: $('userName').value.trim() || '未命名用户', cookie: $('userCookie').value.trim(), games };
+  const data = { name: $('userName').value.trim() || '未命名用户', cookie: $('userCookie').value.trim(), games, server: currentServer() };
   try {
     if (id) {
       if (!data.cookie) delete data.cookie;
@@ -566,11 +601,11 @@ async function checkUserCookie() {
   const el = $('cookieCheckState');
   try {
     if (id) {
-      const d = await api(`/api/users/${id}/check-cookie`, { method: 'POST', body: JSON.stringify({ cookie, game }) });
+      const d = await api(`/api/users/${id}/check-cookie`, { method: 'POST', body: JSON.stringify({ cookie, game, server: currentServer() }) });
       status(el, d.message, d.ok ? 'good' : 'bad');
     } else {
       if (!cookie) { status(el, '请先填写 Cookie', 'bad'); return; }
-      const d = await api('/api/check-cookie', { method: 'POST', body: JSON.stringify({ cookie, game }) });
+      const d = await api('/api/check-cookie', { method: 'POST', body: JSON.stringify({ cookie, game, server: currentServer() }) });
       status(el, d.message, d.ok ? 'good' : 'bad');
     }
   } catch (e) { status(el, e.message, 'bad'); }

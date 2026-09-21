@@ -1,4 +1,14 @@
-import { GAMES, INFO_URL, ROLE_URL, SIGN_URL, type Game } from "./games";
+import {
+  GAMES,
+  INFO_URL,
+  OS_GAMES,
+  OS_LANG,
+  OS_REFERER,
+  ROLE_URL,
+  SIGN_URL,
+  type Game,
+  type OsGame,
+} from "./games";
 
 export type CheckinStatus = "success" | "already" | "skipped" | "failed" | "cookie_expired";
 
@@ -16,6 +26,8 @@ export interface CheckinUser {
   name: string;
   cookie: string;
   games?: string[];
+  /** "cn" = 国服（米游社），"os" = 国际服（HoYoLAB）。默认国服。 */
+  server?: "cn" | "os";
 }
 
 export class ApiError extends Error {}
@@ -39,15 +51,32 @@ export class MiyousheClient {
   private cookie: string;
   private timeoutMs: number;
   private deviceId: string;
+  private server: "cn" | "os";
   private ua = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128 Safari/537.36";
 
-  constructor(cookie: string, timeoutSeconds = 20) {
+  constructor(cookie: string, timeoutSeconds = 20, server: "cn" | "os" = "cn") {
     this.cookie = cookie.trim();
     this.timeoutMs = Math.max(1, timeoutSeconds) * 1000;
     this.deviceId = crypto.randomUUID().toUpperCase();
+    this.server = server === "os" ? "os" : "cn";
   }
 
   private headers(signgame?: string): Record<string, string> {
+    if (this.server === "os") {
+      const headers: Record<string, string> = {
+        "User-Agent": this.ua,
+        Cookie: this.cookie,
+        Accept: "application/json, text/plain, */*",
+        Origin: "https://act.hoyolab.com",
+        Referer: OS_REFERER,
+        "Content-Type": "application/json;charset=UTF-8",
+        "x-rpc-app_version": "2.34.1",
+        "x-rpc-client_type": "4",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      };
+      if (signgame) headers["x-rpc-signgame"] = signgame;
+      return headers;
+    }
     const headers: Record<string, string> = {
       "User-Agent": this.ua,
       Cookie: this.cookie,
@@ -134,9 +163,36 @@ export class MiyousheClient {
     });
     return payload.data ?? {};
   }
+
+  /** 国际服：查询活动信息（is_sign / first_bind / total_sign_day）。 */
+  async osInfo(game: OsGame): Promise<Record<string, any>> {
+    const url = `${game.base}/info?lang=${OS_LANG}&act_id=${game.act_id}`;
+    const payload = await this.request(url, { signgame: game.signgame });
+    return payload.data ?? {};
+  }
+
+  /** 国际服：按账号签到（不需要 region/uid）。 */
+  async osSign(game: OsGame): Promise<Record<string, any>> {
+    const url = `${game.base}/sign?lang=${OS_LANG}`;
+    const payload = await this.request(url, { body: { act_id: game.act_id }, signgame: game.signgame });
+    return payload.data ?? {};
+  }
 }
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function errorResult(userId: string, userName: string, gameName: string, error: unknown): Result {
+  if (error instanceof CookieExpiredError) {
+    return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "cookie_expired", message: error.message };
+  }
+  if (error instanceof NoGameRoleError) {
+    return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "skipped", message: `${error.message}；请确认 Cookie 包含 account_id/cookie_token，且账号已绑定该游戏` };
+  }
+  if (error instanceof ApiError) {
+    return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "failed", message: error.message };
+  }
+  return { user_id: userId, user_name: userName, game: gameName, role: "-", status: "failed", message: `程序异常：${error instanceof Error ? error.message : String(error)}` };
+}
 
 export async function runSingleUser(user: CheckinUser, timeoutSeconds = 20, delaySeconds = 1): Promise<Result[]> {
   const userId = user.id || "unknown";
@@ -145,10 +201,49 @@ export async function runSingleUser(user: CheckinUser, timeoutSeconds = 20, dela
   if (!cookie) {
     return [{ user_id: userId, user_name: userName, game: "-", role: "-", status: "failed", message: "Cookie 未配置" }];
   }
-  const client = new MiyousheClient(cookie, timeoutSeconds);
+  const server: "cn" | "os" = user.server === "os" ? "os" : "cn";
+  const client = new MiyousheClient(cookie, timeoutSeconds, server);
   const selected = user.games ?? ["genshin", "starrail", "zzz"];
   const results: Result[] = [];
 
+  // ── 国际服（HoYoLAB）：按账号签到，不需要角色 region/uid ──
+  if (server === "os") {
+    for (const key of selected) {
+      const game = OS_GAMES[key];
+      if (!game) {
+        results.push({ user_id: userId, user_name: userName, game: key, role: "-", status: "skipped", message: "国际服不支持该游戏" });
+        continue;
+      }
+      try {
+        const info = await client.osInfo(game);
+        if (info.is_sign) {
+          results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "already", message: "今天已签到" });
+          continue;
+        }
+        if (info.first_bind) {
+          results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "skipped", message: "请先在 HoYoLAB 手动签到一次" });
+          continue;
+        }
+        try {
+          await client.osSign(game);
+          results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "success", message: "签到成功" });
+        } catch (error) {
+          const text = error instanceof Error ? error.message : String(error);
+          if (text.includes("-5003") || text.toLowerCase().includes("already")) {
+            results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "already", message: "今天已签到" });
+            continue;
+          }
+          throw error;
+        }
+      } catch (error) {
+        results.push(errorResult(userId, userName, game.name, error));
+      }
+      if (delaySeconds > 0) await sleep(delaySeconds * 1000);
+    }
+    return results;
+  }
+
+  // ── 国服（米游社）：按角色签到 ──
   for (const key of selected) {
     const game = GAMES[key];
     if (!game) {
@@ -186,15 +281,7 @@ export async function runSingleUser(user: CheckinUser, timeoutSeconds = 20, dela
         }
       }
     } catch (error) {
-      if (error instanceof CookieExpiredError) {
-        results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "cookie_expired", message: error.message });
-      } else if (error instanceof NoGameRoleError) {
-        results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "skipped", message: `${error.message}；请确认 Cookie 包含 account_id/cookie_token，且账号已绑定该游戏` });
-      } else if (error instanceof ApiError) {
-        results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "failed", message: error.message });
-      } else {
-        results.push({ user_id: userId, user_name: userName, game: game.name, role: "-", status: "failed", message: `程序异常：${error instanceof Error ? error.message : String(error)}` });
-      }
+      results.push(errorResult(userId, userName, game.name, error));
     }
     if (delaySeconds > 0) await sleep(delaySeconds * 1000);
   }

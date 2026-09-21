@@ -25,6 +25,8 @@ export interface UserConfig {
   name: string;
   cookie: string;
   games: string[];
+  /** "cn" = 国服（米游社），"os" = 国际服（HoYoLAB）。 */
+  server?: "cn" | "os";
 }
 
 export interface AppConfig {
@@ -113,6 +115,7 @@ export function normalizeConfig(raw: unknown): AppConfig {
           name: String(user.name ?? "未命名用户"),
           cookie: String(user.cookie ?? "").trim(),
           games: Array.isArray(user.games) && user.games.length ? (user.games as string[]) : [...DEFAULT_GAMES],
+          server: user.server === "os" ? "os" : "cn",
         } satisfies UserConfig;
       })
     : [];
@@ -158,6 +161,7 @@ export function addUser(config: AppConfig, data: Partial<UserConfig>): UserConfi
     name: String(data.name ?? "未命名用户"),
     cookie: String(data.cookie ?? "").trim(),
     games: Array.isArray(data.games) && data.games.length ? data.games : [...DEFAULT_GAMES],
+    server: data.server === "os" ? "os" : "cn",
   };
   config.users.push(user);
   return user;
@@ -169,6 +173,7 @@ export function updateUser(config: AppConfig, userId: string, data: Partial<User
   if (data.name !== undefined) user.name = String(data.name);
   if (data.cookie !== undefined) user.cookie = String(data.cookie).trim();
   if (data.games !== undefined) user.games = data.games;
+  if (data.server !== undefined) user.server = data.server === "os" ? "os" : "cn";
   return user;
 }
 
@@ -184,6 +189,7 @@ export function safeUser(user: UserConfig) {
     name: user.name,
     cookie_configured: Boolean(String(user.cookie ?? "").trim()),
     games: user.games ?? [],
+    server: user.server ?? "cn",
   };
 }
 

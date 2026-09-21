@@ -28,7 +28,7 @@ import {
   verifyPassword,
   verifyTotp,
 } from "./crypto";
-import { GAMES, gameNames } from "./games";
+import { GAMES, OS_GAMES, gameNames, osGameNames } from "./games";
 import { MiyousheClient, ApiError, CookieExpiredError, NoGameRoleError } from "./miyoushe";
 import { notify } from "./notify";
 import { scheduledCheckin } from "./schedule";
@@ -118,6 +118,7 @@ function publicConfig(config: AppConfig, lastRun: unknown) {
     schedule: config.schedule,
     timezone: config.timezone,
     games_available: gameNames(),
+    os_games_available: osGameNames(),
     users_count: config.users.length,
     last_run: lastRun,
   };
@@ -287,14 +288,16 @@ async function handleApi(env: Env, request: Request): Promise<Response> {
         const user = findUser(config, userId);
         if (!user) return fail(`找不到用户：${userId}`);
         const cookie = String(data.cookie ?? "").trim() || String(user.cookie ?? "").trim();
-        return json(await checkCookie(config, cookie, String(data.game ?? "genshin")));
+        const server: "cn" | "os" = data.server === "os" ? "os" : data.server === "cn" ? "cn" : user.server === "os" ? "os" : "cn";
+        return json(await checkCookie(config, cookie, String(data.game ?? "genshin"), server));
       }
     }
 
     if (path === "/api/check-cookie" && method === "POST") {
       const data = await readJson(request);
       const config = await loadConfig(env);
-      return json(await checkCookie(config, String(data.cookie ?? "").trim(), String(data.game ?? "genshin")));
+      const server: "cn" | "os" = data.server === "os" ? "os" : "cn";
+      return json(await checkCookie(config, String(data.cookie ?? "").trim(), String(data.game ?? "genshin"), server));
     }
     if (path === "/api/test-notification" && method === "POST") {
       const data = await readJson(request);
@@ -439,19 +442,34 @@ async function handleApi(env: Env, request: Request): Promise<Response> {
   return fail("Not found", 404);
 }
 
-async function checkCookie(config: AppConfig, cookie: string, gameKey: string) {
+function checkError(error: unknown) {
+  if (error instanceof CookieExpiredError) return { ok: false, status: "expired", message: error.message };
+  if (error instanceof NoGameRoleError) {
+    return { ok: false, status: "no_role", message: `${error.message}；请确认 Cookie 包含 account_id/cookie_token，且账号已绑定该游戏` };
+  }
+  if (error instanceof ApiError) return { ok: false, status: "failed", message: error.message };
+  return { ok: false, status: "failed", message: error instanceof Error ? error.message : String(error) };
+}
+
+async function checkCookie(config: AppConfig, cookie: string, gameKey: string, server: "cn" | "os" = "cn") {
   if (!cookie) return { ok: false, status: "missing", message: "请先填写 Cookie" };
+  const timeout = Number(config.timeout_seconds ?? 20);
+  if (server === "os") {
+    const game = OS_GAMES[gameKey] ?? OS_GAMES.genshin!;
+    try {
+      const info = await new MiyousheClient(cookie, timeout, "os").osInfo(game);
+      const signed = info.is_sign ? "（今天已签到）" : "";
+      return { ok: true, status: "valid", message: `HoYoLAB Cookie 可用${signed}` };
+    } catch (error) {
+      return checkError(error);
+    }
+  }
   const game = GAMES[gameKey] ?? GAMES.genshin!;
   try {
-    const roles = await new MiyousheClient(cookie, Number(config.timeout_seconds ?? 20)).roles(game.game_biz);
+    const roles = await new MiyousheClient(cookie, timeout).roles(game.game_biz);
     return { ok: true, status: "valid", message: `Cookie 可用，找到 ${roles.length} 个${game.name}角色` };
   } catch (error) {
-    if (error instanceof CookieExpiredError) return { ok: false, status: "expired", message: error.message };
-    if (error instanceof NoGameRoleError) {
-      return { ok: false, status: "no_role", message: `${error.message}；请确认 Cookie 包含 account_id/cookie_token，且账号已绑定该游戏` };
-    }
-    if (error instanceof ApiError) return { ok: false, status: "failed", message: error.message };
-    return { ok: false, status: "failed", message: error instanceof Error ? error.message : String(error) };
+    return checkError(error);
   }
 }
 

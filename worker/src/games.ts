@@ -58,3 +58,52 @@ export function gameNames(): Record<string, string> {
   for (const [key, game] of Object.entries(GAMES)) out[key] = game.name;
   return out;
 }
+
+// ── 国际服（HoYoLAB / OS）────────────────────────────────────────────────────
+// 与国服不同：国际服按「账号」签到（不需要角色 region/uid），且不需要 DS 签名，
+// 只需要 cookie + Referer。endpoint 参考 MihoyoBBSTools 的 hoyo_checkin.py。
+
+export interface OsGame {
+  name: string;
+  base: string;
+  act_id: string;
+  signgame?: string;
+}
+
+export const OS_GAMES: Record<string, OsGame> = {
+  genshin: {
+    name: "原神",
+    base: "https://sg-hk4e-api.hoyolab.com/event/sol",
+    act_id: "e202102251931481",
+  },
+  starrail: {
+    name: "崩坏：星穹铁道",
+    base: "https://sg-public-api.hoyolab.com/event/luna/os",
+    act_id: "e202303301540311",
+  },
+  zzz: {
+    name: "绝区零",
+    base: "https://sg-act-nap-api.hoyolab.com/event/luna/zzz/os",
+    act_id: "e202406031448091",
+    signgame: "zzz",
+  },
+  honkai3rd: {
+    name: "崩坏3",
+    base: "https://sg-public-api.hoyolab.com/event/mani",
+    act_id: "e202110291205111",
+  },
+  tears: {
+    name: "未定事件簿",
+    base: "https://sg-public-api.hoyolab.com/event/luna/os",
+    act_id: "e202202281857121",
+  },
+};
+
+export const OS_REFERER = "https://act.hoyolab.com/";
+export const OS_LANG = "zh-cn";
+
+export function osGameNames(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, game] of Object.entries(OS_GAMES)) out[key] = game.name;
+  return out;
+}
